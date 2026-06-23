@@ -1,0 +1,26 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.DS_Store
+
+# Data — don't commit raw or processed datasets
+data/raw/
+data/processed/
+
+# Model checkpoints — large binaries
+checkpoints/
+
+# Results that can be reproduced
+results/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Kaggle credentials
+kaggle.json
