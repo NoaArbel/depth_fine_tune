@@ -25,14 +25,21 @@ def silog_loss(pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
     return d.pow(2).mean() - 0.5 * d.mean().pow(2)
 
 def gradient_loss(pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
-    ''' Gradient Loss '''
-    # compute only for x.y directions
-    mask = gt > 0
-    grad_pred_x = torch.gradient(pred[mask], dim=2)
-    grad_pred_y = torch.gradient(pred[mask], dim=3)
-    grad_gt_x = torch.gradient(gt[mask], dim=2)
-    grad_gt_y = torch.gradient(gt[mask], dim=3)
-    return torch.mean((grad_pred_x - grad_gt_x).pow(2)) + torch.mean((grad_pred_y - grad_gt_y).pow(2))
+    ''' Gradient Loss — pred/gt: (B, H, W) '''
+    mask = (gt > 0).float()
+
+    # finite differences along x (width) and y (height)
+    grad_pred_x = pred[:, :, 1:] - pred[:, :, :-1]
+    grad_pred_y = pred[:, 1:, :] - pred[:, :-1, :]
+    grad_gt_x   = gt[:, :, 1:]   - gt[:, :, :-1]
+    grad_gt_y   = gt[:, 1:, :]   - gt[:, :-1, :]
+
+    mask_x = mask[:, :, 1:] * mask[:, :, :-1]
+    mask_y = mask[:, 1:, :] * mask[:, :-1, :]
+
+    loss_x = (mask_x * (grad_pred_x - grad_gt_x).abs()).sum() / mask_x.sum().clamp(min=1)
+    loss_y = (mask_y * (grad_pred_y - grad_gt_y).abs()).sum() / mask_y.sum().clamp(min=1)
+    return loss_x + loss_y
 
 
 def train_one_epoch(model, loader: DataLoader, optimizer, scheduler, device: str) -> float:
@@ -71,7 +78,7 @@ def evaluate(model, loader: DataLoader, device: str) -> dict:
         pixel_values = batch["pixel_values"].to(device)
         gt_batch = batch["depth"].numpy()
 
-        outputs = model(pixel_values=pixel_values)
+        outputs = model(pixel_values=pixel_values) # inference step
         pred_batch = outputs.predicted_depth.cpu()
 
         for i in range(len(gt_batch)):
