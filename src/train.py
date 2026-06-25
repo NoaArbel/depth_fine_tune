@@ -58,7 +58,7 @@ def train_one_epoch(model, loader: DataLoader, optimizer, scheduler, device: str
             pred.unsqueeze(1), size=gt.shape[-2:], mode="bilinear", align_corners=False
         ).squeeze(1)
 
-        loss = silog_loss(pred_resized, gt) + LAMBDA_GRAD * gradient_loss(pred_resized, gt)
+        loss = silog_loss(pred_resized, gt)# + LAMBDA_GRAD * gradient_loss(pred_resized, gt)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -166,7 +166,7 @@ def main(config_path: str = "configs/config.yaml") -> None:
 
     rgb_dir = Path(cfg.data.raw_dir) / "rgb"
     depth_dir = Path(cfg.data.raw_dir) / "depth"
-    train_ds, val_ds = make_splits(rgb_dir, depth_dir, processor, train_ratio=0.8, val_ratio=0.2, seed=cfg.data.seed)
+    train_ds, val_ds, _ = make_splits(rgb_dir, depth_dir, processor, train_ratio=0.8, val_ratio=0.2, seed=cfg.data.seed)
     print(f"Train: {len(train_ds)} samples  |  Val: {len(val_ds)} samples")
 
     train_loader = DataLoader(train_ds, batch_size=cfg.training.batch_size, shuffle=True, num_workers=2)
