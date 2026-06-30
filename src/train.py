@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,7 +15,9 @@ from tqdm import tqdm
 from src.dataset import make_splits
 from src.eval import abs_rel, rmse, threshold_accuracy
 from src.model import load_model_with_lora
-from src.utils import align_scale_shift
+from src.utils import align_scale_shift, setup_logging
+
+logger = logging.getLogger(__name__)
 
 LAMBDA_GRAD = 0.1
 
@@ -116,7 +119,10 @@ def run_experiment(
     project_root: Path,
     device: str,
 ) -> dict:
-    print(f"\n{'='*60}\nExperiment: {name}\n{'='*60}")
+    setup_logging()
+    logger.info("=" * 60)
+    logger.info("Experiment: %s", name)
+    logger.info("=" * 60)
 
     model, _ = load_model_with_lora(cfg)
     model = model.to(device)
@@ -134,14 +140,18 @@ def run_experiment(
         train_loss = train_one_epoch(model, train_loader, optimizer, scheduler, device)
         val_metrics = evaluate(model, val_loader, device)
         history.append({"epoch": epoch, "train_loss": train_loss, **val_metrics})
-        print(f"Epoch {epoch}/{cfg.training.epochs}  loss={train_loss:.4f}  abs_rel={val_metrics['abs_rel']:.4f}  delta1={val_metrics['delta1']:.4f}")
+        logger.info(
+            "Epoch %d/%d  loss=%.4f  abs_rel=%.4f  delta1=%.4f",
+            epoch, cfg.training.epochs, train_loss,
+            val_metrics["abs_rel"], val_metrics["delta1"],
+        )
 
     ckpt_dir = project_root / cfg.training.checkpoint_dir / name
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(ckpt_dir)
 
     test_metrics = evaluate(model, test_loader, device)
-    print(f"Test metrics: {test_metrics}")
+    logger.info("Test metrics: %s", test_metrics)
 
     return {"name": name, "history": history, "test_metrics": test_metrics}
 
@@ -155,11 +165,13 @@ def _dict_to_ns(d: dict) -> SimpleNamespace:
 
 
 def main(config_path: str = "configs/config.yaml") -> None:
+    setup_logging()
+
     with open(config_path) as f:
         cfg = _dict_to_ns(yaml.safe_load(f))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Device: {device}")
+    logger.info("Device: %s", device)
 
     model, processor = load_model_with_lora(cfg)
     model = model.to(device)
@@ -167,7 +179,7 @@ def main(config_path: str = "configs/config.yaml") -> None:
     rgb_dir = Path(cfg.data.raw_dir) / "rgb"
     depth_dir = Path(cfg.data.raw_dir) / "depth"
     train_ds, val_ds, _ = make_splits(rgb_dir, depth_dir, processor, train_ratio=0.8, val_ratio=0.2, seed=cfg.data.seed)
-    print(f"Train: {len(train_ds)} samples  |  Val: {len(val_ds)} samples")
+    logger.info("Train: %d samples  |  Val: %d samples", len(train_ds), len(val_ds))
 
     train_loader = DataLoader(train_ds, batch_size=cfg.training.batch_size, shuffle=True, num_workers=2)
     val_loader = DataLoader(val_ds, batch_size=cfg.training.batch_size, shuffle=False, num_workers=2)
@@ -184,14 +196,13 @@ def main(config_path: str = "configs/config.yaml") -> None:
     best_abs_rel = float("inf")
     epochs = cfg.training.epochs
     for epoch in range(1, epochs + 1):
-        print(f"\n=== Epoch {epoch}/{epochs} ===")
+        logger.info("=== Epoch %d/%d ===", epoch, epochs)
         train_loss = train_one_epoch(model, train_loader, optimizer, scheduler, device)
-        print(f"Train loss: {train_loss:.4f}")
+        logger.info("Train loss: %.4f", train_loss)
 
         metrics = evaluate(model, val_loader, device)
-        print("Val metrics:")
         for k, v in metrics.items():
-            print(f"  {k}: {v:.4f}")
+            logger.info("Val %s: %.4f", k, v)
 
         if metrics["abs_rel"] < best_abs_rel:
             best_abs_rel = metrics["abs_rel"]
@@ -199,7 +210,10 @@ def main(config_path: str = "configs/config.yaml") -> None:
             ckpt_dir.mkdir(parents=True, exist_ok=True)
             model.save_pretrained(ckpt_dir)
             (ckpt_dir / "val_metrics.json").write_text(json.dumps(metrics, indent=2))
-            print(f"New best (abs_rel={best_abs_rel:.4f}) — checkpoint saved to {ckpt_dir}")
+            logger.info(
+                "New best abs_rel=%.4f — checkpoint saved to %s",
+                best_abs_rel, ckpt_dir,
+            )
 
 
 if __name__ == "__main__":

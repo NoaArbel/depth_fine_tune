@@ -18,6 +18,6 @@ def rmse(pred: np.ndarray, gt: np.ndarray) -> float:
 
 
 def threshold_accuracy(pred: np.ndarray, gt: np.ndarray, threshold: float) -> float:
-    mask = gt > 0
+    mask = (gt > 0) & (pred > 0)
     ratio = np.maximum(pred[mask] / gt[mask], gt[mask] / pred[mask])
     return float(np.mean(ratio < threshold))
