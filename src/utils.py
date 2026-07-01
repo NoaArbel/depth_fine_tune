@@ -3,8 +3,6 @@ from pathlib import Path
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
-
 
 def setup_logging(level: int = logging.INFO) -> None:
     """Configure root logging once (safe to call from scripts or notebooks)."""
@@ -28,7 +26,6 @@ def align_scale_shift(pred: np.ndarray, gt: np.ndarray) -> np.ndarray:
     Depth Anything V2 outputs affine-invariant (relative) depth, so this alignment
     is required before computing AbsRel or RMSE against metric ground truth.
     """
-    logger.debug("[utils] Aligning scale and shift")
     mask = gt > 0
     p = pred[mask].reshape(-1, 1)
     g = gt[mask].flatten()
