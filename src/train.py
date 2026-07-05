@@ -15,7 +15,7 @@ from tqdm import tqdm
 from src.dataset import make_splits
 from src.eval import abs_rel, rmse, threshold_accuracy
 from src.model import load_model_with_lora
-from src.utils import align_scale_shift, setup_logging
+from src.utils import align_scale_shift, setup_logging, visualize_depth_predictions
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,36 @@ def run_experiment(
     test_metrics = evaluate(model, test_loader, device)
     logger.info("Test metrics: %s", test_metrics)
 
+    vis_dir = project_root / "results" / "visual"
+    visualize_depth_predictions(model, test_ds, device, vis_dir, name)
+    logger.info("Saved visual samples to %s", vis_dir)
+
     return {"name": name, "history": history, "test_metrics": test_metrics}
+
+
+@torch.no_grad()
+def run_baseline(
+    cfg: SimpleNamespace,
+    test_ds,
+    project_root: Path,
+    device: str,
+) -> dict:
+    from transformers import AutoModelForDepthEstimation
+
+    setup_logging()
+    logger.info("Running baseline (pretrained, no fine-tuning)")
+    model = AutoModelForDepthEstimation.from_pretrained(cfg.model.name)
+    model = model.to(device)
+
+    test_loader = DataLoader(test_ds, batch_size=cfg.training.batch_size, shuffle=False, num_workers=2)
+    test_metrics = evaluate(model, test_loader, device)
+    logger.info("Baseline test metrics: %s", test_metrics)
+
+    vis_dir = project_root / "results" / "visual"
+    visualize_depth_predictions(model, test_ds, device, vis_dir, "baseline")
+    logger.info("Saved baseline visual samples to %s", vis_dir)
+
+    return {"name": "baseline", "test_metrics": test_metrics}
 
 
 def _dict_to_ns(d: dict) -> SimpleNamespace:
