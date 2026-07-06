@@ -19,7 +19,6 @@ from src.utils import align_scale_shift, setup_logging, visualize_depth_predicti
 
 logger = logging.getLogger(__name__)
 
-LAMBDA_GRAD = 0.2
 
 def silog_loss(pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
     ''' Sigmoid Logarithmic Error Loss '''
@@ -45,7 +44,7 @@ def gradient_loss(pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
     return loss_x + loss_y
 
 
-def train_one_epoch(model, loader: DataLoader, optimizer, scheduler, device: str) -> float:
+def train_one_epoch(model, loader: DataLoader, optimizer, scheduler, device: str, lambda_grad: float = 0.0) -> float:
     model.train()
     ''' Single trainin step '''
     total_loss = 0.0
@@ -61,7 +60,7 @@ def train_one_epoch(model, loader: DataLoader, optimizer, scheduler, device: str
             pred.unsqueeze(1), size=gt.shape[-2:], mode="bilinear", align_corners=False
         ).squeeze(1)
 
-        loss = silog_loss(pred_resized, gt) + LAMBDA_GRAD * gradient_loss(pred_resized, gt)
+        loss = silog_loss(pred_resized, gt) + lambda_grad * gradient_loss(pred_resized, gt)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -137,7 +136,7 @@ def run_experiment(
 
     history = []
     for epoch in range(1, cfg.training.epochs + 1):
-        train_loss = train_one_epoch(model, train_loader, optimizer, scheduler, device)
+        train_loss = train_one_epoch(model, train_loader, optimizer, scheduler, device, cfg.training.lambda_grad)
         val_metrics = evaluate(model, val_loader, device)
         history.append({"epoch": epoch, "train_loss": train_loss, **val_metrics})
         logger.info(
@@ -226,7 +225,7 @@ def main(config_path: str = "configs/config.yaml") -> None:
     epochs = cfg.training.epochs
     for epoch in range(1, epochs + 1):
         logger.info("=== Epoch %d/%d ===", epoch, epochs)
-        train_loss = train_one_epoch(model, train_loader, optimizer, scheduler, device)
+        train_loss = train_one_epoch(model, train_loader, optimizer, scheduler, device, cfg.training.lambda_grad)
         logger.info("Train loss: %.4f", train_loss)
 
         metrics = evaluate(model, val_loader, device)

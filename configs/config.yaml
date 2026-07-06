@@ -20,9 +20,10 @@ lora:
   bias: none
 
 training:
-  epochs: 5
-  batch_size: 2
+  epochs: 1
+  batch_size: 1
   learning_rate: 1.0e-5
+  lambda_grad: 0.2
   weight_decay: 0.01
   warmup_steps: 100
   save_every: 5
