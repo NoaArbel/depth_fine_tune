@@ -19,7 +19,7 @@ from src.utils import align_scale_shift, setup_logging, visualize_depth_predicti
 
 logger = logging.getLogger(__name__)
 
-LAMBDA_GRAD = 0.1
+LAMBDA_GRAD = 0.2
 
 def silog_loss(pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
     ''' Sigmoid Logarithmic Error Loss '''
@@ -28,20 +28,20 @@ def silog_loss(pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
     return d.pow(2).mean() - 0.5 * d.mean().pow(2)
 
 def gradient_loss(pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
-    ''' Gradient Loss — pred/gt: (B, H, W) '''
+    ''' Gradient Loss in log-space — pred/gt: (B, H, W) '''
     mask = (gt > 0).float()
 
-    # finite differences along x (width) and y (height)
-    grad_pred_x = pred[:, :, 1:] - pred[:, :, :-1]
-    grad_pred_y = pred[:, 1:, :] - pred[:, :-1, :]
-    grad_gt_x   = gt[:, :, 1:]   - gt[:, :, :-1]
-    grad_gt_y   = gt[:, 1:, :]   - gt[:, :-1, :]
+    log_d_diff = torch.log(pred.clamp(min=1e-6)) - torch.log(gt.clamp(min=1e-6))
+    log_d_diff = log_d_diff * mask  # zero out invalid pixels before differencing
+
+    grad_x = (log_d_diff[:, :, 1:] - log_d_diff[:, :, :-1]).abs()
+    grad_y = (log_d_diff[:, 1:, :] - log_d_diff[:, :-1, :]).abs()
 
     mask_x = mask[:, :, 1:] * mask[:, :, :-1]
     mask_y = mask[:, 1:, :] * mask[:, :-1, :]
 
-    loss_x = (mask_x * (grad_pred_x - grad_gt_x).abs()).sum() / mask_x.sum().clamp(min=1)
-    loss_y = (mask_y * (grad_pred_y - grad_gt_y).abs()).sum() / mask_y.sum().clamp(min=1)
+    loss_x = (mask_x * grad_x).sum() / mask_x.sum().clamp(min=1)
+    loss_y = (mask_y * grad_y).sum() / mask_y.sum().clamp(min=1)
     return loss_x + loss_y
 
 
@@ -61,7 +61,7 @@ def train_one_epoch(model, loader: DataLoader, optimizer, scheduler, device: str
             pred.unsqueeze(1), size=gt.shape[-2:], mode="bilinear", align_corners=False
         ).squeeze(1)
 
-        loss = silog_loss(pred_resized, gt)# + LAMBDA_GRAD * gradient_loss(pred_resized, gt)
+        loss = silog_loss(pred_resized, gt) + LAMBDA_GRAD * gradient_loss(pred_resized, gt)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
