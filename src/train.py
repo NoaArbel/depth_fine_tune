@@ -76,12 +76,15 @@ def evaluate(model, loader: DataLoader, device: str) -> dict:
     model.eval()
     all_metrics: list[dict] = []
 
-    for batch in tqdm(loader, desc="eval"):
+    for batch_idx, batch in enumerate(tqdm(loader, desc="eval")):
         pixel_values = batch["pixel_values"].to(device)
         gt_batch = batch["depth"].numpy()
 
         outputs = model(pixel_values=pixel_values) # inference step
         pred_batch = outputs.predicted_depth.cpu()
+
+        if batch_idx == 0:
+            print(f"[eval] pred.mean()={pred_batch.mean():.4f}  gt.mean()={gt_batch.mean():.4f}")
 
         for i in range(len(gt_batch)):
             gt = gt_batch[i]
