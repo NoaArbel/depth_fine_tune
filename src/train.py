@@ -133,8 +133,13 @@ def run_experiment(
     val_loader   = DataLoader(val_ds,   batch_size=cfg.training.batch_size, shuffle=False, num_workers=2)
     test_loader  = DataLoader(test_ds,  batch_size=cfg.training.batch_size, shuffle=False, num_workers=2)
 
-    lora_params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = AdamW(lora_params, lr=cfg.training.learning_rate, weight_decay=cfg.training.weight_decay)
+    lora_params = [p for n, p in model.named_parameters() if "lora" in n and p.requires_grad]
+    head_params = [p for n, p in model.named_parameters()
+                   if any(m in n for m in cfg.lora.unfreeze_modules) and p.requires_grad]
+    param_groups = [{"params": lora_params, "lr": cfg.training.lr_lora}]
+    if head_params:
+        param_groups.append({"params": head_params, "lr": cfg.training.lr_head})
+    optimizer = AdamW(param_groups, weight_decay=cfg.training.weight_decay)
     scheduler = LinearLR(optimizer, start_factor=1e-3, end_factor=1.0, total_iters=cfg.training.warmup_steps)
 
     history = []
@@ -215,8 +220,13 @@ def main(config_path: str = "configs/config.yaml") -> None:
     train_loader = DataLoader(train_ds, batch_size=cfg.training.batch_size, shuffle=True, num_workers=2)
     val_loader = DataLoader(val_ds, batch_size=cfg.training.batch_size, shuffle=False, num_workers=2)
 
-    lora_params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = AdamW(lora_params, lr=cfg.training.learning_rate, weight_decay=cfg.training.weight_decay)
+    lora_params = [p for n, p in model.named_parameters() if "lora" in n and p.requires_grad]
+    head_params = [p for n, p in model.named_parameters()
+                   if any(m in n for m in cfg.lora.unfreeze_modules) and p.requires_grad]
+    param_groups = [{"params": lora_params, "lr": cfg.training.lr_lora}]
+    if head_params:
+        param_groups.append({"params": head_params, "lr": cfg.training.lr_head})
+    optimizer = AdamW(param_groups, weight_decay=cfg.training.weight_decay)
     scheduler = LinearLR(
         optimizer,
         start_factor=1e-3,

@@ -18,11 +18,13 @@ lora:
   target_modules: ["query", "value"]
   lora_dropout: 0.05
   bias: none
+  unfreeze_modules: ["head.", "neck.convs"]
 
 training:
   epochs: 1
   batch_size: 1
-  learning_rate: 1.0e-5
+  lr_lora: 1.0e-4
+  lr_head: 1.0e-5
   lambda_grad: 0.2
   weight_decay: 0.01
   warmup_steps: 100
