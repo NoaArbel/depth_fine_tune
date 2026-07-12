@@ -1,0 +1,35 @@
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  split_csv: data/split.csv
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  seed: 42
+  image_size: 518
+
+model:
+  name: depth-anything/Depth-Anything-V2-Small-hf
+  backbone: vit_small_patch14_518
+
+lora:
+  r: 16
+  lora_alpha: 32
+  target_modules: ["query", "value"]
+  lora_dropout: 0.05
+  bias: none
+  unfreeze_modules: ["head.", "neck.convs"]
+
+training:
+  epochs: 10
+  batch_size: 4
+  lr_lora: 1.0e-4
+  lr_head: 1.0e-5
+  lambda_grad: 0.2
+  weight_decay: 0.01
+  warmup_steps: 100
+  save_every: 5
+  checkpoint_dir: checkpoints/
+
+inference:
+  output_dir: results/
