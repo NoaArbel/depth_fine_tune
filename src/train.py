@@ -63,7 +63,7 @@ def train_one_epoch(model, loader: DataLoader, optimizer, scheduler, device: str
         silog = silog_loss(pred_resized, gt)
         gm = gradient_loss(pred_resized, gt)
         loss = silog + lambda_grad * gm
-        print(f"[train] silog={silog.item():.4f}  gm={gm.item():.4f}  ratio={silog.item()/gm.item():.1f}x")
+        logger.info("[train] silog=%.4f  gm=%.4f  ratio=%.1fx", silog.item(), gm.item(), silog.item()/gm.item())
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -87,7 +87,7 @@ def evaluate(model, loader: DataLoader, device: str) -> dict:
         pred_batch = outputs.predicted_depth.cpu()
 
         if batch_idx == 0:
-            print(f"[eval] pred.mean()={pred_batch.mean():.4f}  gt.mean()={gt_batch.mean():.4f}")
+            logger.info("[eval] pred.mean()=%.4f  gt.mean()=%.4f", pred_batch.mean(), gt_batch.mean())
 
         for i in range(len(gt_batch)):
             gt = gt_batch[i]
@@ -146,10 +146,17 @@ def run_experiment(
     scheduler = LinearLR(optimizer, start_factor=1e-3, end_factor=1.0, total_iters=cfg.training.warmup_steps)
 
     history = []
+    best = {"abs_rel": float("inf"), "delta1": 0.0}
     for epoch in range(1, cfg.training.epochs + 1):
+        logger.info(
+            "Epoch %d/%d  [best so far]  abs_rel=%.4f  delta1=%.4f",
+            epoch, cfg.training.epochs, best["abs_rel"], best["delta1"],
+        )
         train_loss = train_one_epoch(model, train_loader, optimizer, scheduler, device, cfg.training.lambda_grad)
         val_metrics = evaluate(model, val_loader, device)
         history.append({"epoch": epoch, "train_loss": train_loss, **val_metrics})
+        best["abs_rel"] = min(best["abs_rel"], val_metrics["abs_rel"])
+        best["delta1"] = max(best["delta1"], val_metrics["delta1"])
         logger.info(
             "Epoch %d/%d  loss=%.4f  abs_rel=%.4f  delta1=%.4f",
             epoch, cfg.training.epochs, train_loss,
