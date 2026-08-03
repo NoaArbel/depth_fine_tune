@@ -60,7 +60,10 @@ def train_one_epoch(model, loader: DataLoader, optimizer, scheduler, device: str
             pred.unsqueeze(1), size=gt.shape[-2:], mode="bilinear", align_corners=False
         ).squeeze(1)
 
-        loss = silog_loss(pred_resized, gt) + lambda_grad * gradient_loss(pred_resized, gt)
+        silog = silog_loss(pred_resized, gt)
+        gm = gradient_loss(pred_resized, gt)
+        loss = silog + lambda_grad * gm
+        print(f"[train] silog={silog.item():.4f}  gm={gm.item():.4f}  ratio={silog.item()/gm.item():.1f}x")
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
